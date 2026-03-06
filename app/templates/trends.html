@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Tendances{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Tendances Google</h2>
+    <p class="text-sm text-gray-500 mt-1">Recherches tendance en France</p>
+</div>
+
+<!-- Filtres -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-3 items-center">
+    <div>
+        <label class="text-xs text-gray-500 block mb-1">Periode</label>
+        <select id="filterDays" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" onchange="applyFilters()">
+            <option value="1" {{ 'selected' if current_days == 1 }}>Aujourd'hui</option>
+            <option value="3" {{ 'selected' if current_days == 3 }}>3 jours</option>
+            <option value="7" {{ 'selected' if current_days == 7 }}>7 jours</option>
+            <option value="30" {{ 'selected' if current_days == 30 }}>30 jours</option>
+        </select>
+    </div>
+    <div>
+        <label class="text-xs text-gray-500 block mb-1">Categorie</label>
+        <select id="filterCat" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" onchange="applyFilters()">
+            <option value="">Toutes</option>
+            {% for c in categories %}
+            <option value="{{ c.name }}" {{ 'selected' if current_category == c.name }}>{{ c.name }} ({{ c.count }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="text-xs text-gray-500 block mb-1">Recherche</label>
+        <input type="text" id="searchInput" placeholder="Chercher un topic..." class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-48">
+    </div>
+</div>
+
+<!-- Grille tendances -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for t in trends_list %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
+        <div class="flex items-start justify-between mb-2">
+            <h3 class="font-semibold text-gray-900 text-base">{{ t.query }}</h3>
+            <span class="text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ml-2
+                {% if t.category == 'Sport' %}bg-green-100 text-green-700
+                {% elif t.category == 'Technologie' %}bg-blue-100 text-blue-700
+                {% elif t.category == 'Politique' %}bg-red-100 text-red-700
+                {% elif t.category == 'Divertissement' %}bg-purple-100 text-purple-700
+                {% elif t.category == 'Economie' %}bg-yellow-100 text-yellow-700
+                {% elif t.category == 'Sante' %}bg-pink-100 text-pink-700
+                {% elif t.category == 'Science' %}bg-teal-100 text-teal-700
+                {% else %}bg-gray-100 text-gray-700{% endif %}">
+                {{ t.category }}
+            </span>
+        </div>
+        {% if t.traffic_volume %}
+        <p class="text-sm text-gray-500 mb-2">Volume: {{ t.traffic_volume }}</p>
+        {% endif %}
+        <p class="text-xs text-gray-400">{{ t.trend_date }}</p>
+        {% if t.related_queries %}
+        <details class="mt-2">
+            <summary class="text-xs text-indigo-600 cursor-pointer hover:text-indigo-800">Queries liees</summary>
+            <p class="text-xs text-gray-500 mt-1">{{ t.related_queries[:200] }}</p>
+        </details>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="col-span-full text-center py-12 text-gray-400">
+        Aucune tendance trouvee pour cette periode.
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if pages > 1 %}
+<div class="flex justify-center gap-2 mt-6">
+    {% for p in range(1, pages + 1) %}
+    <a href="?days={{ current_days }}&category={{ current_category or '' }}&page={{ p }}"
+       class="px-3 py-2 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if p == current_page else 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50' }}">
+        {{ p }}
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function applyFilters() {
+    const days = document.getElementById('filterDays').value;
+    const cat = document.getElementById('filterCat').value;
+    let url = '/trends?days=' + days;
+    if (cat) url += '&category=' + encodeURIComponent(cat);
+    window.location.href = url;
+}
+
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        const q = this.value.trim();
+        if (q) {
+            fetch('/api/trends/search?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(json => {
+                    if (json.data && json.data.length > 0) {
+                        alert('Trouvé ' + json.data.length + ' résultat(s) pour "' + q + '"');
+                    } else {
+                        alert('Aucun résultat pour "' + q + '"');
+                    }
+                });
+        }
+    }
+});
+</script>
+{% endblock %}

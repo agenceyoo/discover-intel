@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Dashboard</h2>
+    <p class="text-sm text-gray-500 mt-1">Vue d'ensemble Google Discover France</p>
+</div>
+
+<!-- KPIs -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm font-medium text-gray-500">Stories aujourd'hui</p>
+        <p class="text-3xl font-bold text-indigo-600 mt-1">{{ metrics.stories_today }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm font-medium text-gray-500">Topics tendance</p>
+        <p class="text-3xl font-bold text-cyan-600 mt-1">{{ metrics.trends_today }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm font-medium text-gray-500">Editeurs actifs</p>
+        <p class="text-3xl font-bold text-emerald-600 mt-1">{{ metrics.publishers_today }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm font-medium text-gray-500">Categorie dominante</p>
+        <p class="text-3xl font-bold text-amber-600 mt-1">{{ metrics.top_category }}</p>
+    </div>
+</div>
+
+<!-- Tendances + Distribution -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Tendances du moment -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Tendances du moment</h3>
+        {% if trending %}
+        <div class="space-y-2 max-h-80 overflow-y-auto">
+            {% for t in trending %}
+            <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                <span class="font-medium text-gray-800 text-sm">{{ t.query }}</span>
+                <span class="text-xs px-2.5 py-1 rounded-full font-medium
+                    {% if t.category == 'Sport' %}bg-green-100 text-green-700
+                    {% elif t.category == 'Technologie' %}bg-blue-100 text-blue-700
+                    {% elif t.category == 'Politique' %}bg-red-100 text-red-700
+                    {% elif t.category == 'Divertissement' %}bg-purple-100 text-purple-700
+                    {% elif t.category == 'Economie' %}bg-yellow-100 text-yellow-700
+                    {% else %}bg-gray-100 text-gray-700{% endif %}">
+                    {{ t.category }}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-400 text-sm">Aucune tendance collectee. Lancez <code>python seed.py</code> pour la collecte initiale.</p>
+        {% endif %}
+    </div>
+
+    <!-- Distribution categories -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Repartition par categorie</h3>
+        <div class="flex justify-center">
+            <canvas id="categoryDonut" width="300" height="300"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Dernieres stories -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">Dernieres stories</h3>
+    {% if stories %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-gray-500 border-b border-gray-100">
+                    <th class="pb-3 font-medium">Titre</th>
+                    <th class="pb-3 font-medium">Editeur</th>
+                    <th class="pb-3 font-medium">Categorie</th>
+                    <th class="pb-3 font-medium">Date</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for s in stories %}
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="py-3 pr-4">
+                        <a href="{{ s.url }}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-medium line-clamp-1">
+                            {{ s.title[:80] }}{% if s.title|length > 80 %}...{% endif %}
+                        </a>
+                    </td>
+                    <td class="py-3 pr-4 text-gray-600">{{ s.publisher_domain }}</td>
+                    <td class="py-3 pr-4">
+                        <span class="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium">{{ s.assigned_category or 'N/A' }}</span>
+                    </td>
+                    <td class="py-3 text-gray-500 whitespace-nowrap">
+                        {% if s.published_at %}{{ s.published_at[:16] }}{% else %}-{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-gray-400 text-sm">Aucune story collectee.</p>
+    {% endif %}
+</div>
+
+<!-- Top 10 editeurs -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">Top 10 editeurs</h3>
+    <canvas id="publisherBar" height="120"></canvas>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const CATEGORY_COLORS = ['#4F46E5','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#6366F1','#14B8A6','#F97316'];
+
+    // Donut catégories
+    fetch('/api/dashboard/category-distribution')
+        .then(r => r.json())
+        .then(json => {
+            const d = json.data;
+            if (d.labels && d.labels.length > 0) {
+                new Chart(document.getElementById('categoryDonut'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: d.labels,
+                        datasets: [{data: d.values, backgroundColor: CATEGORY_COLORS}]
+                    },
+                    options: {responsive: true, plugins: {legend: {position: 'bottom', labels: {boxWidth: 12}}}}
+                });
+            }
+        });
+
+    // Bar editeurs
+    fetch('/api/dashboard/publisher-top10')
+        .then(r => r.json())
+        .then(json => {
+            const d = json.data;
+            if (d.labels && d.labels.length > 0) {
+                new Chart(document.getElementById('publisherBar'), {
+                    type: 'bar',
+                    data: {
+                        labels: d.labels,
+                        datasets: [{label: 'Stories', data: d.values, backgroundColor: '#4F46E5'}]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        plugins: {legend: {display: false}},
+                        scales: {x: {beginAtZero: true}}
+                    }
+                });
+            }
+        });
+</script>
+{% endblock %}

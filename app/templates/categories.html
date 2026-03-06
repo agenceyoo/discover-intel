@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Categories{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Analyse par categorie</h2>
+    <p class="text-sm text-gray-500 mt-1">Repartition des contenus par thematique</p>
+</div>
+
+<!-- Filtre -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex items-center gap-3">
+    <label class="text-xs text-gray-500">Periode :</label>
+    {% for d in [1, 7, 30] %}
+    <a href="?days={{ d }}" class="px-3 py-1.5 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_days == d else 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+        {{ '24h' if d == 1 else d|string + 'j' }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Grille categories -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+    {% for cat in breakdown %}
+    <a href="/categories/{{ cat.category }}" class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition text-center">
+        <p class="text-2xl font-bold text-indigo-600">{{ cat.count }}</p>
+        <p class="text-sm font-medium text-gray-700 mt-1">{{ cat.category }}</p>
+        <p class="text-xs text-gray-400">{{ cat.percentage }}%</p>
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Graphiques -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Repartition (donut)</h3>
+        <div class="flex justify-center">
+            <canvas id="catDonut" width="300" height="300"></canvas>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Evolution par categorie (30j)</h3>
+        <canvas id="catEvolution" height="250"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLORS = ['#4F46E5','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#6366F1','#14B8A6','#F97316'];
+
+// Donut
+const breakdown = {{ breakdown | tojson }};
+if (breakdown.length > 0) {
+    new Chart(document.getElementById('catDonut'), {
+        type: 'doughnut',
+        data: {
+            labels: breakdown.map(c => c.category),
+            datasets: [{data: breakdown.map(c => c.count), backgroundColor: COLORS}]
+        },
+        options: {responsive: true, plugins: {legend: {position: 'bottom', labels: {boxWidth: 12}}}}
+    });
+}
+
+// Evolution
+fetch('/api/categories/all/trend?days=30')
+    .then(r => r.json())
+    .then(json => {
+        const d = json.data;
+        if (d.labels && d.datasets) {
+            const datasets = d.datasets.map((ds, i) => ({
+                label: ds.label,
+                data: ds.data,
+                borderColor: COLORS[i % COLORS.length],
+                backgroundColor: COLORS[i % COLORS.length] + '20',
+                fill: true,
+                tension: 0.3
+            }));
+            new Chart(document.getElementById('catEvolution'), {
+                type: 'line',
+                data: {labels: d.labels, datasets: datasets},
+                options: {
+                    responsive: true,
+                    plugins: {legend: {position: 'bottom', labels: {boxWidth: 12}}},
+                    scales: {x: {display: true}, y: {beginAtZero: true, stacked: true}}
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

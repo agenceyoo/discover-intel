@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ category_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="/categories" class="text-sm text-indigo-600 hover:text-indigo-800">&larr; Retour aux categories</a>
+    <h2 class="text-2xl font-bold text-gray-900 mt-2">{{ category_name }}</h2>
+    <p class="text-sm text-gray-500 mt-1">{{ total }} stories sur les {{ current_days }} derniers jours</p>
+</div>
+
+<!-- Editeurs dominants -->
+{% if publishers %}
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-700 mb-3">Editeurs dominants</h3>
+    <div class="flex flex-wrap gap-2">
+        {% for p in publishers %}
+        <a href="/publishers/{{ p.domain }}" class="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition">
+            {{ p.domain }} <span class="font-semibold">({{ p.count }})</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Stories -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+    {% if stories_list %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-gray-500 border-b border-gray-100">
+                    <th class="pb-3 font-medium">Titre</th>
+                    <th class="pb-3 font-medium">Editeur</th>
+                    <th class="pb-3 font-medium">Date</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for s in stories_list %}
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="py-3 pr-4">
+                        <a href="{{ s.url }}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-medium">{{ s.title }}</a>
+                    </td>
+                    <td class="py-3 pr-4 text-gray-600 whitespace-nowrap">{{ s.publisher_domain }}</td>
+                    <td class="py-3 text-gray-500 text-xs whitespace-nowrap">{% if s.published_at %}{{ s.published_at[:16] }}{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if pages > 1 %}
+    <div class="flex justify-center gap-2 mt-6">
+        {% for p in range(1, pages + 1) %}
+        <a href="?days={{ current_days }}&page={{ p }}"
+           class="px-3 py-2 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if p == current_page else 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50' }}">
+            {{ p }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="text-gray-400 text-sm text-center py-8">Aucune story pour cette categorie.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Historique{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Tendances historiques</h2>
+    <p class="text-sm text-gray-500 mt-1">Evolution dans le temps des contenus et thematiques</p>
+</div>
+
+<!-- Recherche topic -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+    <label class="text-xs text-gray-500 block mb-2">Rechercher un topic</label>
+    <div class="flex gap-2">
+        <input type="text" id="topicSearch" placeholder="Ex: intelligence artificielle, PSG, Macron..." class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        <button onclick="searchTopic()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition">Rechercher</button>
+    </div>
+    <div id="topicResults" class="mt-3 hidden">
+        <div class="space-y-1" id="topicList"></div>
+    </div>
+</div>
+
+<!-- Volume total -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-gray-700">Volume de stories par jour</h3>
+        <select id="volumeDays" class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs" onchange="loadVolume()">
+            <option value="7">7j</option>
+            <option value="30" selected>30j</option>
+            <option value="90">90j</option>
+        </select>
+    </div>
+    <canvas id="volumeChart" height="150"></canvas>
+</div>
+
+<!-- Evolution categories -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4">Evolution par categorie (30j)</h3>
+    <canvas id="catEvolutionChart" height="200"></canvas>
+</div>
+
+<!-- Comparaison editeurs -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+    <h3 class="text-sm font-semibold text-gray-700 mb-3">Comparer des editeurs</h3>
+    <div class="flex gap-2 mb-4">
+        <input type="text" id="publisherInput" placeholder="Ex: lemonde.fr, lefigaro.fr" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        <button onclick="comparePublishers()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition">Comparer</button>
+    </div>
+    <canvas id="publisherCompare" height="200"></canvas>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLORS = ['#4F46E5','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#6366F1','#14B8A6','#F97316'];
+let volumeChart = null;
+let catChart = null;
+let pubChart = null;
+
+function loadVolume() {
+    const days = document.getElementById('volumeDays').value;
+    fetch('/api/historical/volume?days=' + days)
+        .then(r => r.json())
+        .then(json => {
+            const d = json.data;
+            if (volumeChart) volumeChart.destroy();
+            volumeChart = new Chart(document.getElementById('volumeChart'), {
+                type: 'line',
+                data: {
+                    labels: d.labels,
+                    datasets: [{label: 'Stories', data: d.values, borderColor: '#4F46E5', backgroundColor: 'rgba(79,70,229,0.1)', fill: true, tension: 0.3}]
+                },
+                options: {responsive: true, plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true}}}
+            });
+        });
+}
+
+function loadCatEvolution() {
+    fetch('/api/historical/categories?days=30')
+        .then(r => r.json())
+        .then(json => {
+            const d = json.data;
+            if (!d.labels || !d.datasets) return;
+            const datasets = d.datasets.map((ds, i) => ({
+                label: ds.label,
+                data: ds.data,
+                borderColor: COLORS[i % COLORS.length],
+                backgroundColor: COLORS[i % COLORS.length] + '20',
+                fill: true,
+                tension: 0.3
+            }));
+            if (catChart) catChart.destroy();
+            catChart = new Chart(document.getElementById('catEvolutionChart'), {
+                type: 'line',
+                data: {labels: d.labels, datasets: datasets},
+                options: {
+                    responsive: true,
+                    plugins: {legend: {position: 'bottom', labels: {boxWidth: 12}}},
+                    scales: {y: {beginAtZero: true, stacked: true}}
+                }
+            });
+        });
+}
+
+function searchTopic() {
+    const q = document.getElementById('topicSearch').value.trim();
+    if (!q) return;
+    fetch('/api/historical/topic?q=' + encodeURIComponent(q) + '&days=30')
+        .then(r => r.json())
+        .then(json => {
+            const container = document.getElementById('topicResults');
+            const list = document.getElementById('topicList');
+            const items = json.data.items || [];
+            if (items.length === 0) {
+                list.innerHTML = '<p class="text-sm text-gray-400">Aucun resultat pour "' + q + '"</p>';
+            } else {
+                list.innerHTML = items.map(t =>
+                    '<div class="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">' +
+                    '<span class="font-medium">' + t.query + '</span>' +
+                    '<span class="text-xs text-gray-400">' + t.trend_date + '</span></div>'
+                ).join('');
+            }
+            container.classList.remove('hidden');
+        });
+}
+
+function comparePublishers() {
+    const input = document.getElementById('publisherInput').value.trim();
+    if (!input) return;
+    const domains = input.split(',').map(d => d.trim()).filter(Boolean).join(',');
+    fetch('/api/historical/publishers?domains=' + encodeURIComponent(domains) + '&days=30')
+        .then(r => r.json())
+        .then(json => {
+            const d = json.data;
+            if (!d.labels || !d.datasets) return;
+            const datasets = d.datasets.map((ds, i) => ({
+                label: ds.label,
+                data: ds.data,
+                borderColor: COLORS[i % COLORS.length],
+                tension: 0.3,
+                fill: false
+            }));
+            if (pubChart) pubChart.destroy();
+            pubChart = new Chart(document.getElementById('publisherCompare'), {
+                type: 'line',
+                data: {labels: d.labels, datasets: datasets},
+                options: {
+                    responsive: true,
+                    plugins: {legend: {position: 'bottom', labels: {boxWidth: 12}}},
+                    scales: {y: {beginAtZero: true}}
+                }
+            });
+        });
+}
+
+// Charger au démarrage
+loadVolume();
+loadCatEvolution();
+
+document.getElementById('topicSearch').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') searchTopic();
+});
+</script>
+{% endblock %}

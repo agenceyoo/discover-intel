@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Editeurs{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Classement des editeurs</h2>
+    <p class="text-sm text-gray-500 mt-1">Sources les plus visibles dans Google News France</p>
+</div>
+
+<!-- Filtre periode -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex items-center gap-3">
+    <label class="text-xs text-gray-500">Periode :</label>
+    {% for d in [1, 7, 30] %}
+    <a href="?days={{ d }}" class="px-3 py-1.5 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_days == d else 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+        {{ '24h' if d == 1 else d|string + 'j' }}
+    </a>
+    {% endfor %}
+</div>
+
+{% if error %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm mb-6">{{ error }}</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Tableau -->
+    <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        {% if leaderboard %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-gray-500 border-b border-gray-100">
+                        <th class="pb-3 font-medium w-12">#</th>
+                        <th class="pb-3 font-medium">Editeur</th>
+                        <th class="pb-3 font-medium text-right">Stories</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for p in leaderboard %}
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="py-3 text-gray-400 font-medium">{{ p.rank }}</td>
+                        <td class="py-3">
+                            <a href="/publishers/{{ p.domain }}" class="text-indigo-600 hover:text-indigo-800 font-medium">
+                                {{ p.name or p.domain }}
+                            </a>
+                            <span class="text-xs text-gray-400 ml-1">{{ p.domain }}</span>
+                        </td>
+                        <td class="py-3 text-right font-semibold text-gray-900">{{ p.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-400 text-sm text-center py-8">Aucun editeur trouve.</p>
+        {% endif %}
+    </div>
+
+    <!-- Graphique -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Top 10</h3>
+        <canvas id="publisherChart" height="300"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/api/publishers/leaderboard?days={{ current_days }}&limit=10')
+    .then(r => r.json())
+    .then(json => {
+        const d = json.data;
+        if (d && d.length > 0) {
+            const labels = d.map(p => p.name || p.domain);
+            const values = d.map(p => p.count);
+            new Chart(document.getElementById('publisherChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{label: 'Stories', data: values, backgroundColor: '#4F46E5'}]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: {legend: {display: false}},
+                    scales: {x: {beginAtZero: true}}
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

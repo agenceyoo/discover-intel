@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "discover-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/dschwalberg/Desktop/Discover/run.py"],
+      "port": 5001
+    }
+  ]
+}

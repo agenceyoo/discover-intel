@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Formats de contenu{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Analyse des formats</h2>
+    <p class="text-sm text-gray-500 mt-1">Quel type de contenu performe sur Google Discover</p>
+</div>
+
+<!-- Filtre -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex items-center gap-3">
+    <label class="text-xs text-gray-500">Periode :</label>
+    {% for d in [1, 7, 30] %}
+    <a href="?days={{ d }}" class="px-3 py-1.5 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_days == d else 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+        {{ '24h' if d == 1 else d|string + 'j' }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- KPIs -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+        <p class="text-sm text-gray-500">Articles analyses</p>
+        <p class="text-2xl font-bold text-gray-900">{{ insights.total_articles }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+        <p class="text-sm text-gray-500">Mots moyens</p>
+        <p class="text-2xl font-bold text-indigo-600">{{ insights.avg_word_count }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+        <p class="text-sm text-gray-500">Titre moyen (car.)</p>
+        <p class="text-2xl font-bold text-cyan-600">{{ insights.avg_title_length }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+        <p class="text-sm text-gray-500">Avec image</p>
+        <p class="text-2xl font-bold text-emerald-600">{{ insights.image_rate }}%</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+        <p class="text-sm text-gray-500">Avec video</p>
+        <p class="text-2xl font-bold text-amber-600">{{ insights.video_rate }}%</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+        <p class="text-sm text-gray-500">Donnees structurees</p>
+        <p class="text-2xl font-bold text-purple-600">{{ insights.structured_data_rate }}%</p>
+    </div>
+</div>
+
+<!-- Histogrammes -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Distribution du nombre de mots</h3>
+        <canvas id="wordCountChart" height="250"></canvas>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Distribution de la longueur des titres</h3>
+        <canvas id="titleLengthChart" height="250"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const days = {{ current_days }};
+
+// Word count distribution
+fetch('/api/content/word-count-dist?days=' + days)
+    .then(r => r.json())
+    .then(json => {
+        const d = json.data;
+        new Chart(document.getElementById('wordCountChart'), {
+            type: 'bar',
+            data: {
+                labels: d.labels,
+                datasets: [{label: 'Articles', data: d.values, backgroundColor: '#4F46E5'}]
+            },
+            options: {
+                responsive: true,
+                plugins: {legend: {display: false}},
+                scales: {y: {beginAtZero: true, title: {display: true, text: 'Nombre d\'articles'}}}
+            }
+        });
+    });
+
+// Title length distribution
+fetch('/api/content/title-length-dist?days=' + days)
+    .then(r => r.json())
+    .then(json => {
+        const d = json.data;
+        new Chart(document.getElementById('titleLengthChart'), {
+            type: 'bar',
+            data: {
+                labels: d.labels,
+                datasets: [{label: 'Articles', data: d.values, backgroundColor: '#06B6D4'}]
+            },
+            options: {
+                responsive: true,
+                plugins: {legend: {display: false}},
+                scales: {y: {beginAtZero: true, title: {display: true, text: 'Nombre d\'articles'}}}
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+[Unit]
+Description=Discover Intel - Google Discover France Dashboard
+After=network.target
+
+[Service]
+User=discover
+Group=discover
+WorkingDirectory=/opt/discover
+Environment="FLASK_ENV=production"
+Environment="SECRET_KEY=CHANGEZ_MOI_avec_une_vraie_cle_secrete"
+ExecStart=/opt/discover/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5001 --timeout 120 run:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

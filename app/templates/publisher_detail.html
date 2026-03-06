@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ domain }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="/publishers" class="text-sm text-indigo-600 hover:text-indigo-800">&larr; Retour au classement</a>
+    <h2 class="text-2xl font-bold text-gray-900 mt-2">{{ data.publisher.name or domain }}</h2>
+    <p class="text-sm text-gray-500 mt-1">{{ domain }}</p>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm text-gray-500">Total apparitions</p>
+        <p class="text-2xl font-bold text-indigo-600">{{ data.publisher.total_appearances }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm text-gray-500">Mots moyens / article</p>
+        <p class="text-2xl font-bold text-cyan-600">{{ data.content_stats.avg_word_count }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm text-gray-500">Longueur titre moy.</p>
+        <p class="text-2xl font-bold text-emerald-600">{{ data.content_stats.avg_title_length }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <p class="text-sm text-gray-500">Taux video</p>
+        <p class="text-2xl font-bold text-amber-600">{{ data.content_stats.video_rate }}%</p>
+    </div>
+</div>
+
+<!-- Graphiques -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Stories dans le temps (30j)</h3>
+        <canvas id="trendChart" height="200"></canvas>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Repartition par categorie</h3>
+        <div class="flex justify-center">
+            <canvas id="catChart" width="280" height="280"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLORS = ['#4F46E5','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#6366F1','#14B8A6','#F97316'];
+const domain = '{{ domain }}';
+
+fetch('/api/publishers/' + encodeURIComponent(domain) + '/trend?days=30')
+    .then(r => r.json())
+    .then(json => {
+        const d = json.data;
+        new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: {
+                labels: d.labels,
+                datasets: [{label: 'Stories', data: d.values, borderColor: '#4F46E5', backgroundColor: 'rgba(79,70,229,0.1)', fill: true, tension: 0.3}]
+            },
+            options: {responsive: true, plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true}}}
+        });
+    });
+
+const catData = {{ data.categories | tojson }};
+if (catData.labels && catData.labels.length > 0) {
+    new Chart(document.getElementById('catChart'), {
+        type: 'doughnut',
+        data: {
+            labels: catData.labels,
+            datasets: [{data: catData.values, backgroundColor: COLORS}]
+        },
+        options: {responsive: true, plugins: {legend: {position: 'bottom', labels: {boxWidth: 12}}}}
+    });
+}
+</script>
+{% endblock %}
