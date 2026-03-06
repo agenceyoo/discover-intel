@@ -1,81 +1,141 @@
 #!/bin/bash
 # ============================================================
 # Script de deploiement Discover Intel sur un VPS Ubuntu/Debian
-# Usage: scp -r Discover/ root@VOTRE_IP:/tmp/ && ssh root@VOTRE_IP 'bash /tmp/Discover/deploy/setup-server.sh'
+#
+# Usage (une seule commande depuis votre Mac) :
+#   ssh root@VOTRE_IP 'bash -s' < deploy/setup-server.sh
+#
+# Ou bien sur le serveur :
+#   curl -sL https://raw.githubusercontent.com/agenceyoo/discover-intel/main/deploy/setup-server.sh | bash
 # ============================================================
 set -e
+
+REPO="https://github.com/agenceyoo/discover-intel.git"
+INSTALL_DIR="/opt/discover"
 
 echo "========================================="
 echo " Discover Intel - Installation serveur"
 echo "========================================="
 
 # 1. Mise a jour systeme et dependances
-echo "[1/7] Mise a jour systeme..."
+echo "[1/8] Mise a jour systeme..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-venv python3-pip nginx certbot python3-certbot-nginx
+apt-get install -y -qq python3 python3-venv python3-pip nginx certbot python3-certbot-nginx git
 
 # 2. Creer l'utilisateur
-echo "[2/7] Creation utilisateur discover..."
+echo "[2/8] Creation utilisateur discover..."
 if ! id "discover" &>/dev/null; then
     useradd --system --create-home --shell /bin/bash discover
 fi
 
-# 3. Copier le projet
-echo "[3/7] Installation du projet..."
-mkdir -p /opt/discover
-cp -r /tmp/Discover/* /opt/discover/
-cp -r /tmp/Discover/.env /opt/discover/ 2>/dev/null || true
-chown -R discover:discover /opt/discover
+# 3. Cloner le depot GitHub
+echo "[3/8] Clonage du depot GitHub..."
+if [ -d "$INSTALL_DIR/.git" ]; then
+    cd $INSTALL_DIR
+    sudo -u discover git pull origin main
+else
+    rm -rf $INSTALL_DIR
+    git clone $REPO $INSTALL_DIR
+    chown -R discover:discover $INSTALL_DIR
+fi
 
 # 4. Environnement virtuel Python
-echo "[4/7] Creation environnement Python..."
-sudo -u discover python3 -m venv /opt/discover/venv
-sudo -u discover /opt/discover/venv/bin/pip install --quiet -r /opt/discover/requirements.txt
+echo "[4/8] Creation environnement Python..."
+sudo -u discover python3 -m venv $INSTALL_DIR/venv
+sudo -u discover $INSTALL_DIR/venv/bin/pip install --quiet --upgrade pip
+sudo -u discover $INSTALL_DIR/venv/bin/pip install --quiet -r $INSTALL_DIR/requirements.txt
 
 # 5. Generer une cle secrete et configurer
-echo "[5/7] Configuration production..."
+echo "[5/8] Configuration production..."
 SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-cat > /opt/discover/.env << EOF
+cat > $INSTALL_DIR/.env << EOF
 FLASK_ENV=production
 SECRET_KEY=${SECRET}
 EOF
-chown discover:discover /opt/discover/.env
+chown discover:discover $INSTALL_DIR/.env
+chmod 600 $INSTALL_DIR/.env
 
-# Mettre a jour le service systemd avec la vraie cle
-sed -i "s/CHANGEZ_MOI_avec_une_vraie_cle_secrete/${SECRET}/" /opt/discover/deploy/discover.service
+# 6. Creer le dossier instance pour la DB
+echo "[6/8] Preparation base de donnees..."
+mkdir -p $INSTALL_DIR/instance
+chown discover:discover $INSTALL_DIR/instance
 
-# 6. Configurer systemd
-echo "[6/7] Configuration systemd + nginx..."
-cp /opt/discover/deploy/discover.service /etc/systemd/system/
+# 7. Configurer systemd
+echo "[7/8] Configuration systemd + nginx..."
+# Creer le service avec la bonne cle
+cat > /etc/systemd/system/discover.service << SVCEOF
+[Unit]
+Description=Discover Intel - Google Discover France Dashboard
+After=network.target
+
+[Service]
+User=discover
+Group=discover
+WorkingDirectory=$INSTALL_DIR
+EnvironmentFile=$INSTALL_DIR/.env
+ExecStart=$INSTALL_DIR/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5001 --timeout 120 run:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
 systemctl daemon-reload
 systemctl enable discover
-systemctl start discover
 
-# 7. Configurer nginx
-cp /opt/discover/deploy/nginx.conf /etc/nginx/sites-available/discover
+# Configurer nginx
+SERVER_IP=$(hostname -I | awk '{print $1}')
+cat > /etc/nginx/sites-available/discover << NGXEOF
+server {
+    listen 80;
+    server_name $SERVER_IP;
+
+    location / {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 120s;
+    }
+
+    location /static/ {
+        alias $INSTALL_DIR/app/static/;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+NGXEOF
+
 ln -sf /etc/nginx/sites-available/discover /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
-# 8. Collecte initiale
-echo "[7/7] Premiere collecte de donnees..."
-sudo -u discover /opt/discover/venv/bin/python /opt/discover/seed.py
+# 8. Premiere collecte + demarrage
+echo "[8/8] Premiere collecte de donnees + demarrage..."
+sudo -u discover $INSTALL_DIR/venv/bin/python $INSTALL_DIR/seed.py
+systemctl start discover
 
 echo ""
 echo "========================================="
 echo " INSTALLATION TERMINEE !"
 echo "========================================="
 echo ""
-echo " L'application tourne sur http://$(hostname -I | awk '{print $1}')"
+echo " L'application tourne sur http://$SERVER_IP"
 echo ""
 echo " Commandes utiles :"
-echo "   sudo systemctl status discover    # Voir le statut"
-echo "   sudo systemctl restart discover   # Redemarrer"
-echo "   sudo journalctl -u discover -f    # Voir les logs"
+echo "   sudo systemctl status discover      # Voir le statut"
+echo "   sudo systemctl restart discover     # Redemarrer"
+echo "   sudo journalctl -u discover -f      # Voir les logs"
 echo ""
-echo " Pour ajouter un nom de domaine + HTTPS :"
-echo "   1. Modifier /etc/nginx/sites-available/discover"
-echo "      -> Remplacer VOTRE_DOMAINE.com par votre domaine"
-echo "   2. sudo nginx -t && sudo systemctl reload nginx"
-echo "   3. sudo certbot --nginx -d votre-domaine.com"
+echo " Pour mettre a jour le code :"
+echo "   cd $INSTALL_DIR && sudo -u discover git pull"
+echo "   sudo systemctl restart discover"
+echo ""
+echo " Pour ajouter un domaine + HTTPS :"
+echo "   1. Pointer votre domaine (DNS A) vers $SERVER_IP"
+echo "   2. Modifier server_name dans /etc/nginx/sites-available/discover"
+echo "   3. sudo nginx -t && sudo systemctl reload nginx"
+echo "   4. sudo certbot --nginx -d votre-domaine.com"
 echo ""
