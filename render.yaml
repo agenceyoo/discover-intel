@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: discover-intel
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python seed.py
+    startCommand: gunicorn --workers 2 --bind 0.0.0.0:$PORT --timeout 120 run:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.6
